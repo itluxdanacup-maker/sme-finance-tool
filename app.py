@@ -1,225 +1,124 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-import numpy as np
 
-# --- 1. CONFIGURATION & STYLE ---
-st.set_page_config(page_title="BizHealth CEO Dashboard", page_icon="💼", layout="wide")
+# --- 1. SETTING & STYLE ---
+st.set_page_config(page_title="เครื่องคิดเลขกันเจ๊ง", page_icon="🛡️", layout="centered")
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 1.5rem; }
-    .stNumberInput > div > div > input { text-align: right; font-weight: bold; }
-    
-    /* Card Styling */
-    .metric-card {
-        background-color: #ffffff;
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        text-align: center;
-    }
-    .metric-value { font-size: 28px; font-weight: bold; color: #333; }
-    .metric-label { font-size: 14px; color: #666; margin-bottom: 5px; }
-    
-    /* Pro Alert Box */
-    .pro-alert {
-        padding: 15px; border-radius: 8px; margin-bottom: 20px;
-        border-left: 5px solid #007bff; background-color: #f8f9fa;
-    }
+    .big-money { font-size: 40px !important; font-weight: bold; color: #28a745; text-align: center;}
+    .big-loss { font-size: 40px !important; font-weight: bold; color: #dc3545; text-align: center;}
+    .card { background-color: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #ddd; margin-bottom: 20px; }
+    .stNumberInput input { text-align: right; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR INPUT (COMPACT) ---
-with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=50)
-    st.markdown("### 💼 Executive Control")
-    st.info("กรอกข้อมูลจริงเพื่อการวิเคราะห์ที่แม่นยำ")
+# --- 2. HEADER ---
+st.title("🛡️ เครื่องคิดเลขกันเจ๊ง (Super Profit)")
+st.caption("หน้าบ้านง่ายๆ แต่หลังบ้านคำนวณเป๊ะ! รวมค่าธรรมเนียมแฝงให้ครบ")
+
+# --- 3. INPUT (กรอกง่ายๆ) ---
+with st.container():
+    st.subheader("1. ตั้งราคาขาย & ต้นทุน")
+    col1, col2 = st.columns(2)
+    selling_price = col1.number_input("ราคาขายหน้าร้าน (บาท)", 0.0, value=1700.0, step=10.0)
+    cost_price = col2.number_input("ต้นทุนสินค้า (รวมแพ็ค)", 0.0, value=800.0, step=10.0)
+
+    st.subheader("2. ค่าธรรมเนียม & การตลาด (ตัวดูดเงิน)")
+    col3, col4 = st.columns(2)
     
-    with st.expander("💰 สินทรัพย์ & เงินสด", expanded=True):
-        cash = st.number_input("เงินสดในมือ (Cash)", 0, value=50000)
-        receivables = st.number_input("ลูกหนี้การค้า (A/R)", 0, value=20000)
-        inventory = st.number_input("มูลค่าสต็อก (Inventory)", 0, value=150000)
-
-    with st.expander("📉 หนี้สิน & ค่าใช้จ่าย", expanded=True):
-        debt = st.number_input("หนี้ระยะสั้น (Short-term Debt)", 0, value=40000)
-        fixed_cost = st.number_input("Fixed Cost ต่อเดือน", 0, value=30000)
+    # Platform Fee Logic (ซับซ้อนหลังบ้าน)
+    platform = col3.selectbox("ขายที่ไหน?", ["Website/Facebook (โอนเอง)", "Shopee (Non-Mall)", "Lazada (General)", "TikTok Shop"])
     
-    with st.expander("📊 ผลประกอบการ", expanded=True):
-        sales = st.number_input("ยอดขายเฉลี่ย (Sales)", 0, value=200000)
-        cogs = st.number_input("ต้นทุนขาย (COGS)", 0, value=120000)
-        ads = st.number_input("งบการตลาด (Ads)", 0, value=20000)
-
-# --- 3. LOGIC ENGINE (THE BRAIN) ---
-liquid_assets = cash + receivables
-total_obligations = debt + fixed_cost
-monthly_burn = fixed_cost + ads
-net_profit = sales - cogs - monthly_burn
-
-# Ratios
-try:
-    current_ratio = liquid_assets / debt if debt > 0 else 5
-    runway = (liquid_assets - debt) / monthly_burn if monthly_burn > 0 else 12
-    gross_margin = ((sales - cogs) / sales) * 100 if sales > 0 else 0
-    net_margin = (net_profit / sales) * 100 if sales > 0 else 0
-    inv_turnover = (cogs * 30) / inventory if inventory > 0 else 0 # Days to sell
-except:
-    current_ratio, runway, gross_margin, net_margin, inv_turnover = 0, 0, 0, 0, 0
-
-# Benchmarking Score (เทียบกับมาตรฐานตลาดสมมติ)
-# 0-5 Scale for Radar Chart
-def get_score(val, target):
-    score = (val / target) * 5
-    return min(max(score, 0), 5)
-
-score_liquidity = get_score(current_ratio, 1.5)
-score_resilience = get_score(runway, 6)
-score_margin = get_score(net_margin, 20)
-score_efficiency = get_score(30/inv_turnover if inv_turnover > 0 else 0, 1) # ยิ่งน้อยยิ่งดี กลับเศษส่วน
-score_growth = 3.5 # สมมติค่ากลางๆ
-
-total_health_score = (score_liquidity + score_resilience + score_margin + score_efficiency)/4 * 20 # เต็ม 100
-
-# --- 4. MAIN DASHBOARD ---
-st.title("🛡️ BizHealth: CEO Dashboard")
-st.markdown(f"**Status:** {'🟢 Healthy' if total_health_score > 70 else '🟡 Warning' if total_health_score > 40 else '🔴 Critical'} | **Score:** {total_health_score:.0f}/100")
-
-# 4.1 TOP METRICS (STYLE แบบ DASHBOARD หรู)
-c1, c2, c3, c4 = st.columns(4)
-c1.markdown(f"""<div class="metric-card"><div class="metric-label">💰 Cash Runway</div><div class="metric-value" style="color:{'#28a745' if runway>3 else '#dc3545'}">{runway:.1f} Mo.</div></div>""", unsafe_allow_html=True)
-c2.markdown(f"""<div class="metric-card"><div class="metric-label">📉 Net Profit</div><div class="metric-value" style="color:{'#28a745' if net_profit>0 else '#dc3545'}">{net_profit:,.0f}</div></div>""", unsafe_allow_html=True)
-c3.markdown(f"""<div class="metric-card"><div class="metric-label">📊 Net Margin</div><div class="metric-value">{net_margin:.1f}%</div></div>""", unsafe_allow_html=True)
-c4.markdown(f"""<div class="metric-card"><div class="metric-label">📦 Stock Health</div><div class="metric-value">{inventory/cogs*30:.0f} Days</div></div>""", unsafe_allow_html=True)
-
-st.write("##")
-
-# 4.2 ADVANCED CHARTS
-col_left, col_right = st.columns([1.5, 1])
-
-with col_left:
-    st.subheader("🧪 Stress Test Simulation")
-    st.caption("จำลองสถานการณ์: ธุรกิจคุณจะทนได้แค่ไหนถ้ายอดขายตก?")
+    # ค่าธรรมเนียมโดยประมาณ (ปรับแก้ได้)
+    fee_rates = {
+        "Website/Facebook (โอนเอง)": 0.0,
+        "Shopee (Non-Mall)": 12.0, # สมมติรวม Com+Trans+VAT
+        "Lazada (General)": 12.0,
+        "TikTok Shop": 8.0
+    }
     
-    # Stress Test Logic
-    drop_range = list(range(0, 101, 5))
-    runway_projection = []
-    
-    breaking_point = None
-    
-    for drop in drop_range:
-        sim_sales = sales * (1 - drop/100)
-        sim_gross = sim_sales - (sim_sales * (cogs/sales)) if sales > 0 else 0 # COGS ลดตามยอดขาย
-        sim_profit = sim_gross - monthly_burn
-        
-        # คำนวณเงินสดที่เหลือสะสม (Burn Rate ใหม่)
-        # ถ้าขาดทุน คือกินเงินเก่า
-        burn = abs(sim_profit) if sim_profit < 0 else 0
-        months_survive = (liquid_assets - debt) / burn if burn > 0 else 99
-        
-        if months_survive > 24: months_survive = 24
-        runway_projection.append(months_survive)
-        
-        if months_survive < 1 and breaking_point is None:
-            breaking_point = drop
+    platform_fee_percent = col3.number_input(f"ค่าธรรมเนียม {platform} (%)", 0.0, value=fee_rates[platform])
+    ads_budget = col4.number_input("งบยิงแอด (เฉลี่ยต่อออเดอร์)", 0.0, value=300.0, help="เช่น ยิงแอด 1,000 บาท ขายได้ 10 บ้าน = ตกบ้านละ 100")
 
-    # Area Chart สวยๆ
-    fig_stress = go.Figure()
-    fig_stress.add_trace(go.Scatter(
-        x=drop_range, y=runway_projection, mode='lines', fill='tozeroy', 
-        name='Survival Months', line=dict(color='#007bff', width=3)
-    ))
+    shipping_cost = st.number_input("ค่าส่งที่ร้านช่วยออก (Free Shipping)", 0.0, value=0.0, help="ถ้าลูกค้าจ่ายค่าส่งเอง ใส่ 0")
     
-    # Add Threshold Line
-    fig_stress.add_hline(y=3, line_dash="dash", line_color="red", annotation_text="เขตอันตราย (ต่ำกว่า 3 เดือน)")
-    
-    fig_stress.update_layout(
-        xaxis_title="ยอดขายลดลง (%)",
-        yaxis_title="จำนวนเดือนที่อยู่รอด (Runway)",
-        template="plotly_white",
-        height=350,
-        margin=dict(l=20, r=20, t=30, b=20)
-    )
-    st.plotly_chart(fig_stress, use_container_width=True)
-    
-    if breaking_point:
-        st.error(f"🚨 **จุดตายธุรกิจ (Breaking Point):** ถ้ายอดขายตกเกิน **{breaking_point}%** คุณจะมีเงินสดหมุนเวียนไม่ถึง 1 เดือน!")
-    else:
-        st.success("🛡️ **Strong:** ธุรกิจคุณแข็งแกร่งมาก แม้ยอดขายตก 100% ก็ยังมีเงินเก็บพออยู่ได้เกิน 2 ปี")
+    has_vat = st.checkbox("ร้านจดทะเบียน VAT (7%) หรือไม่?", value=True)
 
-with col_right:
-    st.subheader("🕸️ Business 360° Scan")
-    st.caption("เทียบฟอร์มธุรกิจคุณ vs ค่าเฉลี่ยอุตสาหกรรม")
-    
-    categories = ['สภาพคล่อง (Liquidity)', 'ความอึด (Resilience)', 'กำไร (Margin)', 'การหมุนของ (Efficiency)', 'หนี้สิน (Debt)']
-    
-    # Logic กลับด้าน Debt Score (หนี้น้อย = คะแนนเยอะ)
-    debt_score = 5 - (get_score(debt, liquid_assets) if liquid_assets > 0 else 5)
-    
-    values = [score_liquidity, score_resilience, score_margin, score_efficiency, debt_score]
-    
-    fig_radar = go.Figure()
-    
-    # User Data
-    fig_radar.add_trace(go.Scatterpolar(
-      r=values,
-      theta=categories,
-      fill='toself',
-      name='ธุรกิจของคุณ',
-      line_color='#1f77b4'
-    ))
-    
-    # Industry Benchmark (สมมติ)
-    fig_radar.add_trace(go.Scatterpolar(
-      r=[3, 3, 3, 3, 3],
-      theta=categories,
-      name='ค่าเฉลี่ยตลาด',
-      line_color='#aaaaaa',
-      line_dash='dot'
-    ))
+# --- 4. THE BRAIN (หลังบ้านทำงานหนัก) ---
+# Logic การคำนวณที่แม่นยำ (Hidden Complexity)
 
-    fig_radar.update_layout(
-      polar=dict(radialaxis=dict(visible=True, range=[0, 5])),
-      showlegend=True,
-      height=350,
-      margin=dict(l=40, r=40, t=20, b=20)
-    )
+# 1. VAT ขาย (Output VAT)
+if has_vat:
+    # ถ้าราคาขายรวม VAT แล้ว ต้องถอด VAT ออกมา
+    price_before_vat = selling_price * 100 / 107
+    vat_amount = selling_price - price_before_vat
+else:
+    vat_amount = 0
+
+# 2. Platform Fee (คิดจากยอดขายเต็ม)
+# ส่วนใหญ่ Platform จะคิด VAT 7% บนค่าธรรมเนียมอีกที (Fee + VAT on Fee)
+fee_amount = selling_price * (platform_fee_percent / 100)
+# *หมายเหตุ: สูตรนี้คิดแบบรวบยอดเพื่อความง่ายในหน้าบ้าน
+
+# 3. ต้นทุนรวมทั้งหมด
+total_cost = cost_price + fee_amount + ads_budget + shipping_cost + vat_amount
+
+# 4. กำไรสุทธิ
+net_profit = selling_price - total_cost
+net_profit_margin = (net_profit / selling_price) * 100 if selling_price > 0 else 0
+
+# --- 5. RESULT (แสดงผลง่ายๆ) ---
+st.markdown("---")
+st.subheader("🏁 สรุป: ขายชิ้นนี้...เหลือเงินกี่บาท?")
+
+if net_profit > 0:
+    st.markdown(f'<p class="big-money">+{net_profit:,.2f} บาท</p>', unsafe_allow_html=True)
+    st.success(f"🎉 รอด! กำไร {net_profit_margin:.1f}% (เข้ากระเป๋าจริง)")
+else:
+    st.markdown(f'<p class="big-loss">{net_profit:,.2f} บาท</p>', unsafe_allow_html=True)
+    st.error("😱 ขาดทุน! ขายดีแค่ไหนก็เจ๊ง หยุดขายหรือขึ้นราคาด่วน")
+
+# --- 6. BREAKDOWN (ปุ่มดูไส้ใน) ---
+with st.expander("🔍 เงินขาย 100% หายไปไหนบ้าง? (คลิกดู)"):
+    # Data Visualization
+    data = {
+        'รายการ': ['ต้นทุนของ', 'ค่าธรรมเนียม Platform', 'ค่าแอด', 'ภาษี (VAT)', 'ค่าส่ง', 'กำไรเหลือจริง'],
+        'จำนวนเงิน': [cost_price, fee_amount, ads_budget, vat_amount, shipping_cost, net_profit]
+    }
+    df = pd.DataFrame(data)
     
-    st.plotly_chart(fig_radar, use_container_width=True)
-
-# --- 5. AUTOMATED EXECUTIVE REPORT ---
-st.write("---")
-st.subheader("📑 CEO Executive Summary")
-st.markdown("""<div class="pro-alert">
-    <b>💡 AI Analysis:</b> ระบบกำลังประมวลผลข้อมูลเพื่อสรุปคำแนะนำเชิงกลยุทธ์...
-    </div>""", unsafe_allow_html=True)
-
-report_col1, report_col2 = st.columns(2)
-
-with report_col1:
-    st.markdown("**1. สถานะทางการเงิน (Financial Health):**")
-    if current_ratio < 1:
-        st.write("🔴 **วิกฤต:** หนี้สินระยะสั้นสูงกว่าสินทรัพย์ที่มี ความเสี่ยงผิดนัดชำระหนี้สูงมาก")
-    elif current_ratio < 1.5:
-        st.write("🟡 **เฝ้าระวัง:** สภาพคล่องตึงตัว ควรชะลอการลงทุนและเน้นเก็บเงินสด")
-    else:
-        st.write("🟢 **แข็งแกร่ง:** สภาพคล่องสูง มีความพร้อมในการรับมือวิกฤตหรือขยายกิจการ")
-        
-    st.markdown("**2. ประสิทธิภาพการทำกำไร (Profitability):**")
-    if net_margin < 5:
-        st.write(f"🔴 **ต่ำ:** Net Margin {net_margin:.1f}% น้อยเกินไป เสี่ยงขาดทุนหากค่าแอดแพงขึ้น")
-    elif net_margin < 15:
-        st.write(f"🟡 **ปานกลาง:** Net Margin {net_margin:.1f}% อยู่ในเกณฑ์มาตรฐาน แต่ควรหาทางลดต้นทุน COGS")
-    else:
-        st.write(f"🟢 **สูง:** Net Margin {net_margin:.1f}% ทำได้ดีมาก แสดงถึง Brand Value ที่แข็งแรง")
-
-with report_col2:
-    st.markdown("**3. คำแนะนำเชิงกลยุทธ์ (Strategic Action):**")
-    actions = []
-    if runway < 3: actions.append("- ⚠️ **Urgent:** ต้องหาแหล่งเงินทุนเพิ่ม หรือระบายสต็อกเป็นเงินสดทันที")
-    if inv_turnover > 90: actions.append("- 📦 **Stock Warning:** สินค้าหมุนเวียนช้าเกินไป (ติดดอย) ควรจัดโปรโมชั่นล้างสต็อก")
-    if ads/sales > 0.3: actions.append("- 📢 **Ads Efficiency:** ค่าโฆษณาสูงเกิน 30% ของยอดขาย ควรปรับกลุ่มเป้าหมายหรือทำ Content ใหม่")
-    if not actions: actions.append("- ✅ **Maintain:** รักษามาตรฐานปัจจุบัน และมองหาโอกาส Scale up ธุรกิจ")
+    # แสดงเป็นตารางสวยๆ
+    st.table(df)
     
-    for action in actions:
-        st.write(action)
+    st.caption("*หมายเหตุ: การคำนวณนี้เป็นการประมาณการเบื้องต้น (รวม VAT ในค่าธรรมเนียมแล้ว)")
+
+# --- 7. FEATURE: PROMOTION SIMULATOR (ฟีเจอร์แถมที่โคตรคุ้ม) ---
+st.markdown("---")
+st.header("⚡ ลองจัดโปรฯ (Flash Sale)")
+st.write("ถ้าร่วมแคมเปญ ลดราคาหนักๆ จะยังเหลือกำไรไหม?")
+
+discount_percent = st.slider("จะลดราคากี่ %", 0, 50, 10)
+new_price = selling_price * (100 - discount_percent) / 100
+
+# คำนวณใหม่แบบไวๆ
+new_fee = new_price * (platform_fee_percent / 100)
+# สมมติ VAT แปรผันตามราคาใหม่
+if has_vat:
+    new_vat = new_price - (new_price * 100 / 107)
+else:
+    new_vat = 0
+    
+new_profit = new_price - (cost_price + new_fee + ads_budget + shipping_cost + new_vat)
+
+col_sim1, col_sim2 = st.columns(2)
+with col_sim1:
+    st.metric("ราคาขายใหม่", f"{new_price:,.0f} บาท")
+with col_sim2:
+    st.metric("กำไรหลังลดราคา", f"{new_profit:,.2f} บาท", 
+             delta_color="normal" if new_profit > 0 else "inverse")
+
+if new_profit < 0:
+    st.warning("⚠️ ลดขนาดนี้ เข้าเนื้อนะครับ!")
+else:
+    st.info("✅ ลดได้ครับ ยังเหลือกำไรอยู่")
