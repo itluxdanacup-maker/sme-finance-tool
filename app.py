@@ -1,157 +1,164 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
+import math
 
-# --- 1. SETUP & STYLE ---
-st.set_page_config(page_title="SME Health Check", page_icon="🏥", layout="wide")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="SME Master Tool", page_icon="💎", layout="wide")
 
+# Custom CSS
 st.markdown("""
 <style>
-    /* ปรับ UI ให้สะอาดตา เหมือน App มือถือ */
     .block-container { padding-top: 2rem; }
     .stNumberInput > div > div > input { text-align: right; }
-    .big-font { font-size: 20px !important; color: #555; }
-    .result-card { padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    .safe { background-color: #d1e7dd; color: #0f5132; border-left: 5px solid #198754; }
-    .warning { background-color: #fff3cd; color: #664d03; border-left: 5px solid #ffc107; }
-    .danger { background-color: #f8d7da; color: #842029; border-left: 5px solid #dc3545; }
+    .premium-box { background-color: #f0f8ff; padding: 20px; border-radius: 10px; border: 1px solid #007bff; }
+    .result-card { padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; }
+    .safe { background-color: #d1e7dd; color: #0f5132; }
+    .danger { background-color: #f8d7da; color: #842029; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. INPUT SECTION (SIMPLE FRONTEND) ---
-st.title("🏥 ตรวจสุขภาพธุรกิจ (ฉบับใช้งานจริง)")
-st.caption("กรอกตัวเลขจริงของเดือนนี้ (ใส่ 0 ได้ถ้าไม่มี)")
+st.title("💎 SME Master Tool: ครบเครื่องเรื่องกำไร")
+st.caption("ระบบวิเคราะห์สุขภาพการเงิน & เครื่องมือคำนวณราคาขายแม่นยำ")
 
-col_input1, col_input2, col_input3 = st.columns(3)
-
-with col_input1:
-    st.subheader("1. เงินสด & ทรัพย์สิน")
-    cash = st.number_input("เงินสดในมือ/ธนาคาร", min_value=0, value=0, help="เงินที่ดึงมาใช้ได้ทันที")
-    receivables = st.number_input("ลูกหนี้การค้า/เงินรอโอน", min_value=0, value=0, help="เงินจากลูกค้า หรือ Platform ที่กำลังจะโอนมา")
-    inventory = st.number_input("มูลค่าสต็อกสินค้า (ราคาทุน)", min_value=0, value=0)
-
-with col_input2:
-    st.subheader("2. หนี้สิน & รายจ่าย")
-    short_term_debt = st.number_input("หนี้ต้องจ่ายใน 30 วัน", min_value=0, value=0, help="ค่าของ, ค่าแอด, บัตรเครดิต")
-    fixed_cost = st.number_input("รายจ่ายคงที่ต่อเดือน", min_value=0, value=0, help="ค่าเช่า, เงินเดือน, ค่าน้ำไฟ")
+# --- 2. INPUT DATA (SIDEBAR) ---
+with st.sidebar:
+    st.header("📝 ข้อมูลพื้นฐาน")
+    cash = st.number_input("เงินสดในมือ", 0, value=50000)
+    receivables = st.number_input("เงินรอโอน", 0, value=20000)
+    inventory_val = st.number_input("มูลค่าสต็อก (ทุน)", 0, value=100000)
     
-with col_input3:
-    st.subheader("3. ผลประกอบการ")
-    monthly_sales = st.number_input("ยอดขายเฉลี่ยต่อเดือน", min_value=0, value=0)
-    cogs = st.number_input("ต้นทุนสินค้าขาย (COGS)", min_value=0, value=0, help="เฉพาะค่าต้นทุนของสินค้าที่ขายไป")
-    ads_cost = st.number_input("ค่าโฆษณา/การตลาด", min_value=0, value=0)
+    st.markdown("---")
+    debt = st.number_input("หนี้ต้องจ่าย (30 วัน)", 0, value=30000)
+    fixed_cost = st.number_input("ค่าใช้จ่ายคงที่", 0, value=25000)
+    
+    st.markdown("---")
+    avg_sales = st.number_input("ยอดขายเฉลี่ย/เดือน", 0, value=150000)
+    cogs_current = st.number_input("ต้นทุนสินค้าขาย (COGS)", 0, value=90000)
 
-st.divider()
+# --- 3. LOGIC (CORE) ---
+liquid_assets = cash + receivables
+obligations = debt + fixed_cost
+runway = (liquid_assets - debt) / fixed_cost if fixed_cost > 0 else 99
+burn_rate = fixed_cost
 
-# --- 3. COMPLEX BACKEND LOGIC (The Brain) ---
-# ระบบคำนวณหลังบ้านที่ซับซ้อนขึ้น เพื่อความแม่นยำ
+# --- 4. TABS INTERFACE ---
+tab1, tab2, tab3 = st.tabs(["🏥 ตรวจสุขภาพ (ฟรี)", "💎 คำนวณราคาขาย (Premium)", "📦 คำนวณสั่งของ (Premium)"])
 
-# ตัวแปรคำนวณพื้นฐาน
-total_liquid_assets = cash + receivables
-total_obligations = short_term_debt + fixed_cost
-net_burn_rate = fixed_cost + ads_cost
-gross_profit = monthly_sales - cogs
-net_profit = gross_profit - net_burn_rate
+# === TAB 1: HEALTH CHECK (FREE VERSION) ===
+with tab1:
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.subheader("ผลตรวจสุขภาพธุรกิจ")
+        if runway < 1:
+            st.error(f"🚨 **อันตราย!** เงินสดไม่พอจ่ายหนี้ (Runway {runway:.1f} เดือน)")
+        elif runway < 3:
+            st.warning(f"⚠️ **เฝ้าระวัง** เงินสดพอหมุนได้ {runway:.1f} เดือน")
+        else:
+            st.success(f"✅ **แข็งแรง** สภาพคล่องดีเยี่ยม (Runway {runway:.1f} เดือน)")
+            
+        # Basic Metrics
+        m1, m2, m3 = st.columns(3)
+        m1.metric("เงินสดสุทธิ", f"{liquid_assets - debt:,.0f}")
+        m2.metric("กำไรขั้นต้น (บาท)", f"{avg_sales - cogs_current:,.0f}")
+        m3.metric("Margin (%)", f"{(avg_sales - cogs_current)/avg_sales*100:.1f}%" if avg_sales > 0 else "0%")
 
-# ป้องกัน Error หารด้วยศูนย์ (Division by Zero Protection)
-def safe_div(n, d):
-    return n / d if d > 0 else 0
+    with col2:
+        # Pie Chart
+        fig = go.Figure(data=[go.Pie(labels=['เงินสดที่มี', 'หนี้ที่ต้องจ่าย'], values=[liquid_assets, obligations], hole=.3)])
+        fig.update_layout(height=250, margin=dict(l=20,r=20,t=20,b=20), showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
 
-# 3.1 Advanced Ratios
-# Cash Runway (อยู่ได้กี่เดือน) - คิดละเอียดรวมหนี้ระยะสั้น
-runway_months = safe_div(total_liquid_assets - short_term_debt, net_burn_rate) 
-if runway_months < 0: runway_months = 0 # ถ้าติดลบคืออยู่ไม่ได้เลย
-
-# Defensive Interval Ratio (DIR) - ธุรกิจอยู่ได้กี่วันถ้าไม่มีรายได้เข้าเลย
-daily_burn = net_burn_rate / 30
-dir_days = safe_div(total_liquid_assets, daily_burn)
-
-# Quick Ratio (สภาพคล่องหมุนเร็ว)
-quick_ratio = safe_div(total_liquid_assets, short_term_debt) if short_term_debt > 0 else 99
-
-# Inventory Turnover Days (ของจมกี่วัน)
-inventory_days = safe_div(inventory, (cogs / 30))
-
-# 3.2 Scoring Algorithm (Weighted Score)
-# ให้คะแนนเต็ม 100 โดยถ่วงน้ำหนักปัจจัยสำคัญ
-score = 0
-# Factor 1: Liquidity (40%)
-if quick_ratio >= 1.0: score += 40
-elif quick_ratio >= 0.8: score += 20
-elif quick_ratio >= 0.5: score += 10
-
-# Factor 2: Runway (30%)
-if runway_months >= 6: score += 30
-elif runway_months >= 3: score += 20
-elif runway_months >= 1: score += 10
-
-# Factor 3: Profitability (30%)
-profit_margin = safe_div(net_profit, monthly_sales)
-if profit_margin > 0.15: score += 30 # กำไร > 15%
-elif profit_margin > 0: score += 15  # มีกำไรนิดหน่อย
-elif profit_margin > -0.1: score += 5 # ขาดทุนไม่เยอะ
-
-# --- 4. OUTPUT DISPLAY (SIMPLE FRONTEND) ---
-
-# Logic เลือกสีและการแสดงผล
-if score >= 80:
-    status_color = "safe"
-    status_icon = "✅"
-    status_text = "แข็งแรงมาก"
-    advice = "สภาพคล่องเหลือเฟือ ธุรกิจมีกำไร พร้อมสำหรับการขยายกิจการ หรือลงทุนเพิ่ม"
-elif score >= 50:
-    status_color = "warning"
-    status_icon = "⚠️"
-    status_text = "พอใช้ได้ (เฝ้าระวัง)"
-    advice = "ธุรกิจเดินต่อได้แต่ห้ามสะดุด! ระวังอย่าสต็อกของเพิ่มเกินความจำเป็น และพยายามเก็บเงินสดเพิ่ม"
-else:
-    status_color = "danger"
-    status_icon = "🚨"
-    status_text = "อาการน่าเป็นห่วง (ICU)"
-    advice = f"วิกฤต! เงินสดไม่พอหมุน คุณมีโอกาสเงินขาดมือในอีก {runway_months:.1f} เดือนข้างหน้า ต้องรีบระบายของหรือลดรายจ่ายด่วนที่สุด"
-
-# แสดงผลแบบ Card ใหญ่ๆ เข้าใจง่าย
-col_res1, col_res2 = st.columns([2, 1])
-
-with col_res1:
-    st.markdown(f"""
-    <div class="result-card {status_color}">
-        <h2 style='margin:0'>{status_icon} ผลวินิจฉัย: {status_text} (คะแนน {score}/100)</h2>
-        <p class="big-font" style='margin-top:10px'>{advice}</p>
+# === TAB 2: SMART PRICING (KILLER FEATURE) ===
+with tab2:
+    st.markdown("""
+    <div class="premium-box">
+    <h3>💰 Reverse Pricing Calculator</h3>
+    <p>อย่าตั้งราคาตามใจฉัน! คำนวณย้อนกลับเพื่อหากำไรสุทธิที่แท้จริง (รวมค่าธรรมเนียม Platform แล้ว)</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Simple Metrics
-    m1, m2, m3 = st.columns(3)
-    m1.metric("💰 เงินสดสุทธิ (หลังหักหนี้)", f"{total_liquid_assets - short_term_debt:,.0f}", help="เงินสด + ลูกหนี้ - หนี้ที่ต้องจ่าย")
-    m2.metric("📉 กำไร/ขาดทุน เดือนนี้", f"{net_profit:,.0f}", delta_color="normal")
-    m3.metric("⏳ อยู่รอดได้อีก (Runway)", f"{runway_months:.1f} เดือน")
-
-with col_res2:
-    # Gauge Chart (ดูง่ายๆ)
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number", value = score,
-        domain = {'x': [0, 1], 'y': [0, 1]},
-        title = {'text': "Health Score"},
-        gauge = {
-            'axis': {'range': [None, 100]},
-            'bar': {'color': "#333"},
-            'steps': [
-                {'range': [0, 50], 'color': "#ffcccb"},
-                {'range': [50, 80], 'color': "#fff3cd"},
-                {'range': [80, 100], 'color': "#d1e7dd"}]
-        }
-    ))
-    fig.update_layout(height=250, margin=dict(l=20,r=20,t=30,b=20))
-    st.plotly_chart(fig, use_container_width=True)
-
-# --- 5. DEEP DIVE (กดเพื่อดูไส้ใน) ---
-with st.expander("🔍 ดูรายละเอียดลึกๆ (สำหรับคนอยากรู้วิเคราะห์)"):
-    st.write(f"**1. Defensive Interval Ratio:** {dir_days:.0f} วัน (ถ้าหยุดขายวันนี้ คุณจะอยู่ได้กี่วัน)")
-    st.write(f"**2. Inventory Days:** {inventory_days:.0f} วัน (กว่าจะขายของสต็อกเดิมหมด ใช้เวลากี่วัน)")
-    st.write(f"**3. Quick Ratio:** {quick_ratio:.2f} เท่า (สินทรัพย์สภาพคล่องสูง หารด้วย หนี้ระยะสั้น -- ควรมากกว่า 1.0)")
+    col_p1, col_p2 = st.columns(2)
     
-    if monthly_sales > 0:
-        breakeven = net_burn_rate / ((monthly_sales - cogs) / monthly_sales)
-        st.write(f"**4. จุดคุ้มทุน (Breakeven Sales):** ต้องมียอดขาย {breakeven:,.0f} บาท ถึงจะไม่ขาดทุน")
+    with col_p1:
+        st.markdown("##### 1. ต้นทุนของคุณ")
+        unit_cost = st.number_input("ต้นทุนสินค้าต่อชิ้น (รวมแพ็ค)", 0.0, value=950.0, step=10.0)
+        target_profit = st.number_input("กำไรสุทธิที่อยากได้ (บาท/ชิ้น)", 0.0, value=300.0, step=10.0)
+        
+    with col_p2:
+        st.markdown("##### 2. ค่าหัวคิว & ค่าใช้จ่ายแฝง")
+        platform_fee = st.number_input("ค่าธรรมเนียม Platform (%)", 0.0, value=12.0, help="เช่น Shopee/Lazada รวม VAT (ประมาณ 10-15%)")
+        ads_percent = st.number_input("เผื่อค่าโฆษณา (%)", 0.0, value=15.0)
+        tax_vat = st.number_input("ภาษีมูลค่าเพิ่ม (VAT 7%)", 0.0, value=7.0, help="ถ้าจด VAT ให้ใส่ 7 ถ้าไม่จดใส่ 0")
+
+    st.markdown("---")
+    
+    # Calculation Logic
+    # Price = (Cost + Profit) / (1 - (Fee% + Ads% + Vat%)) 
+    # *Note: สูตรนี้คิดแบบคร่าวๆ เพื่อ Cover ต้นทุน (สูตรจริง VAT จะคิดซ้อนยอดขาย แต่เพื่อความง่ายใช้การบวก % ไปก่อน)
+    
+    total_deduct_percent = platform_fee + ads_percent + (tax_vat if tax_vat > 0 else 0)
+    
+    if total_deduct_percent >= 100:
+        st.error("เป็นไปไม่ได้! ค่าใช้จ่ายเกิน 100% ของราคาขาย")
+        suggested_price = 0
+    else:
+        # สูตร Reverse Price: เราต้องการเงิน (Cost + Profit) เหลือถึงมือ ดังนั้นเราต้องตั้งราคาเผื่อโดนหัก %
+        suggested_price = (unit_cost + target_profit) / ((100 - total_deduct_percent) / 100)
+    
+    col_res1, col_res2 = st.columns([1.5, 1])
+    
+    with col_res1:
+        st.markdown(f"### 🏷️ ราคาที่ต้องตั้งขายคือ: <span style='color:#007bff; font-size:36px'> {suggested_price:,.0f} </span> บาท", unsafe_allow_html=True)
+        st.caption(f"เพื่อให้เหลือเข้ากระเป๋าจริง {target_profit:,.0f} บาท/ชิ้น")
+        
+    with col_res2:
+        # Breakdown chart
+        fee_amt = suggested_price * (platform_fee/100)
+        ads_amt = suggested_price * (ads_percent/100)
+        vat_amt = suggested_price * (tax_vat/100)
+        
+        df_price = pd.DataFrame({
+            'รายการ': ['ต้นทุนของ', 'กำไรเข้ากระเป๋า', 'จ่าย Platform', 'จ่ายค่าแอด', 'ภาษี'],
+            'จำนวนเงิน': [unit_cost, target_profit, fee_amt, ads_amt, vat_amt]
+        })
+        st.dataframe(df_price, hide_index=True)
+
+# === TAB 3: SMART RESTOCK (INVENTORY) ===
+with tab3:
+    st.markdown("""
+    <div class="premium-box">
+    <h3>📦 Smart Restock Alert</h3>
+    <p>ของจะหมดวันไหน? ต้องสั่งเพิ่มเมื่อไหร่? (คำนวณเผื่อเวลาขนส่งให้แล้ว)</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    c1, c2, c3 = st.columns(3)
+    current_stock = c1.number_input("สต็อกปัจจุบัน (ชิ้น)", 0, value=100)
+    sales_velocity = c2.number_input("ขายออกเฉลี่ย (ชิ้น/วัน)", 0, value=5)
+    lead_time = c3.number_input("ระยะเวลาขนส่ง (วัน)", 0, value=15, help="สั่งของจากจีน/โรงงาน ใช้เวลากี่วันกว่าของจะถึงมือ")
+    
+    # Logic
+    if sales_velocity > 0:
+        days_left = current_stock / sales_velocity
+        reorder_point = sales_velocity * lead_time # จุดที่ต้องสั่งของ (Simple Reorder Point)
+        stock_status = ""
+        
+        st.markdown(f"##### 📊 สถานะสต็อก: ขายได้อีก **{days_left:.0f}** วัน")
+        
+        # Timeline Visualization
+        my_bar = st.progress(0)
+        if days_left <= lead_time:
+            st.error(f"🚨 **สั่งของด่วน!** (เหลือเวลาขาย {days_left:.0f} วัน แต่ของใช้เวลาส่ง {lead_time} วัน -> ของขาดแน่นอน!)")
+            my_bar.progress(100)
+        elif days_left <= (lead_time + 7):
+            st.warning(f"⚠️ **เตรียมสั่งได้แล้ว** (เหลือ Buffer อีก {(days_left - lead_time):.0f} วัน)")
+            my_bar.progress(70)
+        else:
+            st.success(f"✅ **ยังปลอดภัย** อีก {(days_left - lead_time):.0f} วันค่อยสั่งก็ได้")
+            my_bar.progress(30)
+            
+        st.info(f"💡 **Tip:** ควรเริ่มกดสั่งของเมื่อสต็อกเหลือต่ำกว่า **{reorder_point}** ชิ้น")
+        
+    else:
+        st.write("กรุณากรอกยอดขายต่อวัน")
