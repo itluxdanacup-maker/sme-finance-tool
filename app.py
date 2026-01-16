@@ -3,161 +3,193 @@ import pandas as pd
 import math
 
 # --- 1. SETTING & STYLE ---
-st.set_page_config(page_title="Seller Super App Pro", page_icon="🚀", layout="centered")
+st.set_page_config(page_title="Seller Super App Auto", page_icon="🛍️", layout="centered")
 
 st.markdown("""
 <style>
-    /* Styling */
     .big-stat { font-size: 28px !important; font-weight: bold; color: #333; text-align: center; }
-    .target-box { background-color: #e3f2fd; padding: 20px; border-radius: 15px; border: 2px solid #2196f3; text-align: center; margin-bottom: 20px;}
-    .daily-mission { font-size: 40px !important; font-weight: bold; color: #d63384; }
-    .card { background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #ddd; }
-    section[data-testid="stSidebar"] { background-color: #f0f2f6; }
+    .target-box { background-color: #e0f7fa; padding: 20px; border-radius: 15px; border: 2px solid #00bcd4; text-align: center; margin-bottom: 20px;}
+    .daily-mission { font-size: 42px !important; font-weight: bold; color: #0097a7; }
+    .auto-tag { background-color: #d1ecf1; color: #0c5460; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    section[data-testid="stSidebar"] { background-color: #f8f9fa; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. SIDEBAR NAVIGATION ---
+# --- 2. CONFIGURATION (ฐานข้อมูลค่าธรรมเนียมกลาง) ---
+# แก้ไขค่า Default ตรงนี้ได้เลย
+PLATFORM_FEES = {
+    "Website / Facebook (โอนเอง)": 0.0,
+    "TikTok Shop": 8.0,       # ประมาณ 8% (รวม VAT)
+    "Shopee (Non-Mall)": 12.0, # ประมาณ 12% (ค่าคอม+ธุรกรรม+ส่งฟรี+VAT)
+    "Lazada (General)": 12.0,  # ใกล้เคียง Shopee
+    "LINE SHOPPING": 3.0       # ประมาณ 3%
+}
+
+# --- 3. SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2897/2897785.png", width=80)
-    st.title("Seller Command Center")
-    menu = st.radio("เลือกปฏิบัติการ:", 
-        ["🎯 ตั้งเป้าหมาย (Mission Control)",
-         "🛡️ คิดราคาขาย (Profit)", 
+    st.title("ระบบจัดการร้าน")
+    menu = st.radio("เลือกเมนู:", 
+        ["🎯 ตั้งเป้าหมาย (Mission)",
+         "🛡️ คิดราคาขาย (Auto Price)", 
          "📢 ตรวจค่าแอด (Ads Doctor)", 
          "🏥 ตรวจสุขภาพร้าน (Cash Flow)"])
+    st.caption("V4.0 (Auto-Pilot Mode)")
+
+# ==========================================
+# PAGE 1: 🎯 MISSION CONTROL (AUTO)
+# ==========================================
+if menu == "🎯 ตั้งเป้าหมาย (Mission)":
+    st.title("🎯 Mission Commander")
+    st.caption("แค่บอกว่าอยากรวยเท่าไหร่ ที่เหลือระบบคำนวณให้")
+
+    # 1. INPUT ความฝัน
+    target_profit = st.number_input("เดือนนี้อยากได้กำไรเข้ากระเป๋า (บาท)", 0, value=100000, step=5000)
     
     st.markdown("---")
-    st.caption("Version 3.0 (Mission Commander)")
-
-# ==========================================
-# PAGE 1: 🎯 MISSION CONTROL (NEW FEATURE)
-# ==========================================
-if menu == "🎯 ตั้งเป้าหมาย (Mission Control)":
-    st.title("🎯 Mission Commander")
-    st.caption("เปลี่ยนฝันให้เป็นเป้าหมายรายวัน")
-
-    # 1. INPUT เป้าหมาย
-    st.markdown("##### 1. ความฝันของคุณ")
-    target_profit = st.number_input("เดือนนี้อยากได้กำไรสุทธิกี่บาท? (เข้ากระเป๋า)", 0, value=100000, step=5000)
+    st.markdown("##### 🛒 ข้อมูลสินค้า (ค่าเฉลี่ย)")
     
-    st.markdown("##### 2. ข้อมูลสินค้า (ค่าเฉลี่ย)")
+    # 2. PLATFORM SELECTOR (พระเอกของงานนี้)
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        selected_platform = st.selectbox("ส่วนใหญ่ขายที่ไหน?", list(PLATFORM_FEES.keys()), index=2) # Default Shopee
+    with col_p2:
+        # Auto-fill ค่าธรรมเนียมตามที่เลือก
+        default_fee = PLATFORM_FEES[selected_platform]
+        fee_percent = st.number_input(f"ค่าธรรมเนียม {selected_platform} (%)", 0.0, value=default_fee, step=0.5, help="ระบบใส่ค่ามาตรฐานให้ แต่แก้เองได้")
+
+    # 3. COST INPUTS
     c1, c2 = st.columns(2)
-    avg_price = c1.number_input("ราคาขายเฉลี่ยต่อชิ้น", 0, value=1590)
-    avg_cost = c2.number_input("ต้นทุนสินค้า + ค่าธรรมเนียม", 0, value=900, help="ต้นทุนของ + ค่ากล่อง + ค่า GP Lazada/Shopee")
+    avg_price = c1.number_input("ราคาขายเฉลี่ย (บาท)", 0, value=1590)
+    product_cost = c2.number_input("ต้นทุนสินค้าจริง (ไม่รวม Fee)", 0, value=600, help="ค่าของ + ค่าแพ็ค (ไม่ต้องบวกค่าธรรมเนียม เดี๋ยวระบบคิดให้)")
     
-    st.markdown("##### 3. ค่าใช้จ่ายดำเนินงาน")
     c3, c4 = st.columns(2)
-    fixed_cost = c3.number_input("ค่าใช้จ่ายคงที่ (เงินเดือน/เช่า)", 0, value=20000)
-    ads_cost_per_sale = c4.number_input("ค่าแอดเฉลี่ยต่อออเดอร์ (CPR)", 0, value=250)
+    fixed_cost = c3.number_input("ค่าใช้จ่ายคงที่ร้าน (บาท)", 0, value=20000)
+    ads_cost = c4.number_input("ค่าแอดเฉลี่ยต่อออเดอร์ (บาท)", 0, value=250)
 
-    # Calculation Logic
-    # สูตร: (Unit_Price - Unit_Cost - Ads) * Units - Fixed_Cost = Target_Profit
-    # ย้ายข้างหา Units: Units = (Target_Profit + Fixed_Cost) / (Unit_Price - Unit_Cost - Ads)
-    
-    profit_per_unit = avg_price - avg_cost - ads_cost_per_sale
-    
+    # --- AUTO CALCULATION ---
+    # คำนวณค่าธรรมเนียมเป็นบาทอัตโนมัติ
+    fee_baht = avg_price * (fee_percent / 100)
+    total_variable_cost = product_cost + fee_baht + ads_cost
+    profit_per_unit = avg_price - total_variable_cost
+
     st.markdown("---")
     
     if profit_per_unit <= 0:
-        st.error(f"❌ เป็นไปไม่ได้! สินค้าคุณขาดทุนต่อชิ้น {profit_per_unit:,.0f} บาท (ยังไม่ทันหัก Fix Cost เลย)")
+        st.error(f"❌ **ขายขาดทุน!** หักลบแล้วติดลบ {profit_per_unit:,.0f} บาทต่อชิ้น (ยังไม่ทันจ่ายค่าเช่าร้านเลย)")
+        st.warning(f"แนะนำ: ต้องขึ้นราคา หรือลดต้นทุนแอด/ค่าของ ด่วน!")
     else:
         # คำนวณเป้าหมาย
         required_gross_profit = target_profit + fixed_cost
         required_units = math.ceil(required_gross_profit / profit_per_unit)
-        required_sales_vol = required_units * avg_price
-        estimated_ads_budget = required_units * ads_cost_per_sale
-        
-        # Daily Target (คิด 30 วัน)
         daily_units = math.ceil(required_units / 30)
-        daily_sales = required_sales_vol / 30
-
-        # --- OUTPUT: MISSION CARD ---
+        
+        # แสดงผลแบบการ์ดสวยๆ
         st.markdown(f"""
         <div class="target-box">
-            <h3>🔥 ภารกิจประจำวันของคุณ (Daily Mission)</h3>
-            <div class="daily-mission">{daily_units} ออเดอร์ / วัน</div>
-            <p>หรือยอดขาย {daily_sales:,.0f} บาท/วัน</p>
+            <h3>🔥 ภารกิจวันนี้ (Daily Mission)</h3>
+            <div class="daily-mission">{daily_units} ออเดอร์</div>
+            <p>กำไรต่อชิ้นของคุณคือ: <b>{profit_per_unit:,.0f} บาท</b> (หักทุกอย่างแล้ว)</p>
         </div>
         """, unsafe_allow_html=True)
-
-        # Detail Stats
-        c_res1, c_res2, c_res3 = st.columns(3)
-        c_res1.metric("📦 เป้าทั้งเดือน (ชิ้น)", f"{required_units:,}")
-        c_res2.metric("💰 ยอดขายรวม (GMV)", f"{required_sales_vol:,.0f}")
-        c_res3.metric("📢 เตรียมงบแอด", f"{estimated_ads_budget:,.0f}")
         
-        st.info(f"💡 **Tip:** คุณต้องทำกำไรต่อชิ้นให้ได้ **{profit_per_unit:,.0f} บาท** เพื่อครอบคลุมค่าใช้จ่ายคงที่และกำไรที่ตั้งเป้าไว้")
+        # Breakdown ย่อย
+        with st.expander("🔍 ดูที่มาของตัวเลข (ระบบคิดให้แบบนี้)"):
+            st.write(f"1. ราคาขาย: {avg_price} บาท")
+            st.write(f"2. หัก ต้นทุนของ: -{product_cost} บาท")
+            st.write(f"3. หัก ค่าธรรมเนียม ({fee_percent}%): -{fee_baht:,.0f} บาท (Auto)")
+            st.write(f"4. หัก ค่าแอด: -{ads_cost} บาท")
+            st.write(f"**= เหลือจริงต่อชิ้น: {profit_per_unit:,.0f} บาท**")
+            st.write(f"--------------------------------")
+            st.write(f"ต้องหาเงินจ่าย Fix Cost: {fixed_cost:,} บาท")
+            st.write(f"อยากได้กำไรส่วนตัว: {target_profit:,} บาท")
+            st.write(f"รวมต้องหาเงิน: {required_gross_profit:,} บาท -> หารกำไรต่อชิ้น -> ได้เป้าหมาย!")
 
 # ==========================================
-# PAGE 2: 🛡️ PROFIT SHIELD
+# PAGE 2: 🛡️ AUTO PRICE (PROFIT SHIELD)
 # ==========================================
-elif menu == "🛡️ คิดราคาขาย (Profit)":
-    st.title("🛡️ เครื่องคิดเลขกันเจ๊ง")
-    # ... (Code เดิมจาก Profit Calculator) ...
-    with st.container():
-        c1, c2 = st.columns(2)
-        selling_price = c1.number_input("ราคาขาย (บาท)", 0.0, value=1590.0, step=10.0)
-        cost_price = c2.number_input("ต้นทุนของ (รวมแพ็ค)", 0.0, value=650.0, step=10.0)
+elif menu == "🛡️ คิดราคาขาย (Auto Price)":
+    st.title("🛡️ เครื่องคิดเลขกันเจ๊ง (Auto)")
+    st.caption("เลือกแพลตฟอร์ม -> ใส่ทุน -> รู้เรื่อง!")
+
+    # 1. PLATFORM & VAT (บนสุด)
+    col_top1, col_top2 = st.columns(2)
+    with col_top1:
+        platform_shield = st.selectbox("จะขายที่ไหน?", list(PLATFORM_FEES.keys()), index=2)
+    with col_top2:
+        has_vat = st.checkbox("ร้านจด VAT 7% ไหม?", value=True)
+
+    # 2. MAIN INPUTS
+    col_main1, col_main2 = st.columns(2)
+    selling_price = col_main1.number_input("ราคาที่จะตั้งขาย (บาท)", 0.0, value=1590.0, step=10.0)
+    cost_price = col_main2.number_input("ต้นทุนสินค้า (รวมแพ็ค)", 0.0, value=600.0, step=10.0)
+    
+    # 3. HIDDEN FEES (Auto-filled but editable)
+    with st.expander("⚙️ ตั้งค่าธรรมเนียม & ค่าแอด (แก้ไขได้)", expanded=True):
         c3, c4 = st.columns(2)
-        gp_fee = c3.number_input("ค่าธรรมเนียม Platform (%)", 0.0, value=12.0)
+        # ดึงค่า Default มาใส่ให้เลย
+        auto_fee = PLATFORM_FEES[platform_shield]
+        gp_fee = c3.number_input(f"Fee {platform_shield} (%)", 0.0, value=auto_fee)
         ads_per_order = c4.number_input("ค่าแอดต่อบ้าน (บาท)", 0.0, value=250.0)
-        has_vat = st.checkbox("จด VAT 7%", value=True)
 
+    # --- CALCULATION ---
     if selling_price > 0:
+        # Logic ภาษี & Fee
         net_selling_price = selling_price * 100 / 107 if has_vat else selling_price
         vat_amt = selling_price - net_selling_price
         fee_amt = selling_price * (gp_fee / 100)
+        
         total_deduct = cost_price + fee_amt + ads_per_order + vat_amt
         net_profit = selling_price - total_deduct
         margin_percent = (net_profit / selling_price) * 100
 
         st.markdown("---")
+        # แสดงผลตัวใหญ่ๆ
         if net_profit > 0:
-            st.markdown(f"<div class='big-stat' style='color:#28a745'>+{net_profit:,.0f} บาท ({margin_percent:.1f}%)</div>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="text-align:center;">
+                <h1 style="color:#28a745; margin-bottom:0;">+{net_profit:,.0f} บาท</h1>
+                <p style="font-size:18px;">กำไรสุทธิ <b>{margin_percent:.1f}%</b> (เข้ากระเป๋าจริง)</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Bar Chart ง่ายๆ
+            st.progress(min(margin_percent/100, 1.0))
+            if margin_percent < 15:
+                st.warning("⚠️ กำไรบางมาก (ต่ำกว่า 15%) เหนื่อยฟรีระวังไม่คุ้ม")
+            else:
+                st.success("✅ กำไรสวย! ลุยได้เลย")
+                
         else:
-            st.markdown(f"<div class='big-stat' style='color:#dc3545'>{net_profit:,.0f} บาท</div>", unsafe_allow_html=True)
-            st.error("ขาดทุน!")
+            st.markdown(f"""
+            <div style="text-align:center;">
+                <h1 style="color:#dc3545; margin-bottom:0;">{net_profit:,.0f} บาท</h1>
+                <p style="font-size:18px;">❌ ขาดทุนยับ!</p>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ==========================================
-# PAGE 3: 📢 ADS DOCTOR
+# PAGE 3 & 4 (เหมือนเดิม)
 # ==========================================
 elif menu == "📢 ตรวจค่าแอด (Ads Doctor)":
     st.title("📢 หมอตรวจแอด")
-    # ... (Code เดิมจาก Ads Doctor) ...
-    col_a1, col_a2 = st.columns(2)
-    ad_spend = col_a1.number_input("งบที่ใช้ไป", 0.0, value=5000.0)
-    sales_from_ads = col_a2.number_input("ยอดขายที่ได้", 0.0, value=15000.0)
-    profit_margin_percent = st.slider("กำไรขั้นต้นสินค้า (%)", 10, 90, 40)
-    st.markdown("---")
-    
-    if ad_spend > 0 and sales_from_ads > 0:
-        actual_roas = sales_from_ads / ad_spend
-        breakeven_roas = 1 / (profit_margin_percent / 100)
-        net_ads_profit = (sales_from_ads * (profit_margin_percent / 100)) - ad_spend
-        
-        c1, c2 = st.columns(2)
-        c1.metric("ROAS จริง", f"{actual_roas:.2f}")
-        c2.metric("ROAS ขั้นต่ำที่รอด", f"{breakeven_roas:.2f}")
-        
-        if actual_roas >= breakeven_roas:
-            st.success(f"✅ กำไร {net_ads_profit:,.0f} บาท")
-        else:
-            st.error(f"❌ ขาดทุน {abs(net_ads_profit):,.0f} บาท")
+    # (Copy Logic เดิมมาใส่ได้เลย หรือใช้ตัวย่อนี้)
+    ad_spend = st.number_input("งบที่ใช้ (Ad Spend)", 0.0, value=5000.0)
+    sales = st.number_input("ยอดขายที่ได้ (GMV)", 0.0, value=15000.0)
+    margin = st.slider("กำไรขั้นต้นสินค้า (%)", 10, 90, 40)
+    if ad_spend > 0:
+        roas = sales/ad_spend
+        be_roas = 100/margin
+        st.metric("ROAS จริง vs ขั้นต่ำ", f"{roas:.2f} vs {be_roas:.2f}")
+        if roas >= be_roas: st.success("✅ กำไร")
+        else: st.error("❌ ขาดทุน")
 
-# ==========================================
-# PAGE 4: 🏥 HEALTH CHECK
-# ==========================================
 elif menu == "🏥 ตรวจสุขภาพร้าน (Cash Flow)":
     st.title("🏥 ตรวจสุขภาพการเงิน")
-    # ... (Code เดิมจาก Cash Flow) ...
-    c1, c2, c3 = st.columns(3)
-    cash = c1.number_input("เงินสด", 0, value=50000)
-    debt = c2.number_input("หนี้ (30วัน)", 0, value=30000)
-    expense = c3.number_input("รายจ่ายคงที่", 0, value=20000)
-    
-    liquidity = cash - debt
-    runway = (cash - debt) / expense if expense > 0 else 99
-    
-    st.metric("สภาพคล่องสุทธิ", f"{liquidity:,.0f}")
+    # (Logic เดิม)
+    cash = st.number_input("เงินสด", 0, value=50000)
+    debt = st.number_input("หนี้สิน", 0, value=30000)
+    expense = st.number_input("รายจ่ายคงที่", 0, value=20000)
+    runway = (cash-debt)/expense if expense>0 else 99
     st.metric("อยู่ได้อีก (เดือน)", f"{runway:.1f}")
-    if runway < 3: st.warning("ระวัง! สภาพคล่องต่ำ")
+    if runway < 3: st.warning("สภาพคล่องต่ำ")
